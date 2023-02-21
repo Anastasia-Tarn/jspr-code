@@ -1,7 +1,5 @@
 package ru.netology;
 
-import jdk.internal.module.ModuleHashesBuilder;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -9,39 +7,38 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Server {
 
-    ServerSocket server = new ServerSocket();
-    Socket socket;
+
     final List<String> validPaths = List.of("/index.html", "/spring.svg", "/spring.png", "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html", "/classic.html", "/events.html", "/events.js");
     public Server() throws IOException {
     }
 
-    public void startServer() {
+    private final ConcurrentHashMap <String, ConcurrentHashMap<String, Handler>> handlers = new ConcurrentHashMap<>();
 
-        try {
-            server = new ServerSocket(9999);
-            System.out.println("Server started");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void acceptingUser () {
-        while (true) {
+    public void listen (int port) {
             try {
-                socket = server.accept();
-                System.out.println("Client connected");
+                ServerSocket server = new ServerSocket(port);
+                System.out.println("Server started");
+                while (true) {
+
+                    Socket socket = server.accept();
+                    System.out.println("Client connected");
+                    handlingServer(socket);
+
+                }
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
+
         }
-    }
 
-    //Реализовать обработку подключений с помощью ThreadPool
+        
 
-    public void handlingServer() {
+    public void handlingServer(Socket socket) {
 
                 new Thread(() -> {
                     try (final var out = new BufferedOutputStream(socket.getOutputStream());
@@ -57,6 +54,18 @@ public class Server {
                             if (parts.length != 3) {
                                 // just close socket
                                 continue;
+                            }
+
+                            var request = new Request(parts[0], parts[1], parts[2], null, null);
+
+                            if (!handlers.containsKey(request.getMethod())) {
+                                out.write((
+                                        "HTTP/1.1 404 Not Found\r\n" +
+                                                "Content-Length: 0\r\n" +
+                                                "Connection: close\r\n" +
+                                                "\r\n"
+                                ).getBytes());
+                                out.flush();
                             }
 
                             final var path = parts[1];
@@ -109,7 +118,16 @@ public class Server {
                     }
                 }).start();
         }
+
+
+    public void addHandler(String method, String path, ru.netology.Handler handler) {
+        if (!handlers.containsKey(method)) {
+            handlers.put(method, new ConcurrentHashMap<>());
+        }
+
+        handlers.get(method).put(path, handler);
     }
+}
 
 
 
